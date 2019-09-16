@@ -15,10 +15,10 @@ use serde::Deserialize;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let circle_token = env::var("CIRCLE_TOKEN").expect("missing CIRCLE_TOKEN environemt variable");
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 6 {
+    if args.len() != 5 {
         writeln!(
             std::io::stderr(),
-            "Usage: {} VCS USER PROJECT BUILD_NUM DIRECTORY",
+            "Usage: {} VCS USER PROJECT BUILD_NUM",
             Path::new(&args[0]).file_name().unwrap().to_str().unwrap()
         )
         .unwrap();
@@ -29,7 +29,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user = &args[2];
     let project = &args[3];
     let build_num = u32::from_str(&args[4]).unwrap();
-    let download_dir = &args[5];
 
     let circle_job = CircleCIBuild {
         vcs: String::from(vcs),
@@ -38,7 +37,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         build_num: build_num,
     };
 
-    circle_job.download_artifacts(&circle_token, Path::new(download_dir)).unwrap();
+    let dest = format!(
+        "{vcs}/{user}/{project}/{build_num}",
+        vcs = circle_job.vcs,
+        user = circle_job.user,
+        project = circle_job.project,
+        build_num = circle_job.build_num
+    );
+
+    circle_job.download_artifacts(&circle_token, Path::new(&dest)).unwrap();
 
     Ok(())
 }
@@ -67,15 +74,18 @@ impl CircleCIBuild {
         Ok(urls)
     }
 
-    fn download_artifacts(&self, token: &String, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    fn download_artifacts(
+        &self,
+        token: &String,
+        destination: &Path,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let urls = self.artifact_urls(token)?;
         let common_len = urls.lcp().len();
 
         let client = reqwest::Client::new();
         for url in &urls {
             println!("Download {}", url);
-            let url_with_token =
-                reqwest::Url::parse_with_params(url, &[("circle-token", token)])?;
+            let url_with_token = reqwest::Url::parse_with_params(url, &[("circle-token", token)])?;
             let mut resp = client.get(url_with_token).send()?;
 
             let mut file = url.clone();
