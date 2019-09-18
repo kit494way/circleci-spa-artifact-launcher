@@ -21,7 +21,11 @@ use serde::Deserialize;
 use staticfile::Static;
 
 fn main() {
-    let circle_token = env::var("CIRCLE_TOKEN").expect("missing CIRCLE_TOKEN environemt variable");
+    let circle_token = env::var("CIRCLE_TOKEN").unwrap_or_else(|_| {
+        writeln!(std::io::stderr(), "missing CIRCLE_TOKEN environemt variable.").unwrap();
+        std::process::exit(1);
+    });
+
     let port = env::var("PORT").unwrap_or("3000".to_string());
 
     let vcs = nth_arg_or_exit(1);
