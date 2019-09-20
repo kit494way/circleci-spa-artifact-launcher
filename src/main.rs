@@ -32,6 +32,7 @@ fn main() {
     let user = nth_arg_or_exit(2);
     let project = nth_arg_or_exit(3);
     let build_num = u32::from_str(nth_arg_or_exit(4).as_str()).unwrap();
+    let handle_assets = std::env::args().nth(5).map(|x| x == "--handle-assets").unwrap_or(false);
 
     let downloaded_dir = download_artifacts(vcs, user, project, build_num, circle_token).unwrap();
 
@@ -39,6 +40,10 @@ fn main() {
     mount.mount("/", Static::new(downloaded_dir.clone()));
 
     let mut chain = Chain::new(mount);
+    if handle_assets {
+        let assets = StaticAssets::new(downloaded_dir.clone(), "static".to_string());
+        chain.link_after(assets);
+    }
     chain.link_after(NotFoundResponsePath {
         path: downloaded_dir.join(Path::new("index.html")),
     });
@@ -67,6 +72,17 @@ fn print_usage_and_exit() {
     std::process::exit(1);
 }
 
+fn downloaded_dir(vcs: String, user: String, project: String, build_num: u32) -> PathBuf {
+    let dest = format!(
+        "{vcs}/{user}/{project}/{build_num}",
+        vcs = vcs,
+        user = user,
+        project = project,
+        build_num = build_num
+    );
+    PathBuf::from(&dest)
+}
+
 fn download_artifacts(
     vcs: String,
     user: String,
@@ -74,6 +90,8 @@ fn download_artifacts(
     build_num: u32,
     token: String,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let dest_path = downloaded_dir(vcs.clone(), user.clone(), project.clone(), build_num);
+
     let circle_job = CircleCIBuild {
         vcs: vcs,
         user: user,
@@ -81,16 +99,7 @@ fn download_artifacts(
         build_num: build_num,
     };
 
-    let dest = format!(
-        "{vcs}/{user}/{project}/{build_num}",
-        vcs = circle_job.vcs,
-        user = circle_job.user,
-        project = circle_job.project,
-        build_num = circle_job.build_num
-    );
-    let dest_path = Path::new(&dest);
-
-    circle_job.download_artifacts(&token, dest_path)?;
+    circle_job.download_artifacts(&token, dest_path.as_ref())?;
 
     Ok(PathBuf::from(dest_path))
 }
@@ -194,6 +203,36 @@ impl AfterMiddleware for NotFoundResponsePath {
         match err.response.status {
             Some(iron::status::NotFound) => {
                 Ok(Response::with((iron::status::Ok, self.path.clone())))
+            }
+            _ => Err(err),
+        }
+    }
+}
+
+struct StaticAssets {
+    dir_name: String,
+    dir_path: PathBuf,
+}
+
+impl StaticAssets {
+    fn new(server_root: PathBuf, dir_name: String) -> StaticAssets {
+        let dir_path = server_root.join(&dir_name);
+        StaticAssets { dir_name, dir_path }
+    }
+}
+
+impl AfterMiddleware for StaticAssets {
+    fn catch(&self, req: &mut Request, err: IronError) -> IronResult<Response> {
+        match err.response.status {
+            Some(iron::status::NotFound) if req.url.path().contains(&self.dir_name.as_str()) => {
+                let url_path = req.url.path();
+                let path_under_static = url_path
+                    .split(|x| *x == self.dir_name)
+                    .skip(1)
+                    .next()
+                    .unwrap();
+                let path = self.dir_path.join(path_under_static.join("/"));
+                Ok(Response::with((iron::status::Ok, path)))
             }
             _ => Err(err),
         }
