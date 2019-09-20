@@ -5,42 +5,69 @@ extern crate serde;
 extern crate serde_json;
 extern crate staticfile;
 
-use std::env;
 use std::fs;
 use std::fs::File;
 use std::io::BufWriter;
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use iron::prelude::*;
 use iron::AfterMiddleware;
 use mount::Mount;
 use serde::Deserialize;
 use staticfile::Static;
+use structopt::StructOpt;
+
+
+#[derive(StructOpt)]
+struct Opt {
+    /// CircleCI API Token
+    #[structopt(long, env = "CIRCLE_TOKEN")]
+    circle_token: String,
+
+    #[structopt(long)]
+    handle_assets: bool,
+
+    #[structopt(long)]
+    skip_download: bool,
+
+    #[structopt(long, parse(from_os_str))]
+    directory: Option<PathBuf>,
+
+    #[structopt(long, default_value = "3000")]
+    port: u32,
+
+    /// VCS type supported by CircleCI. Currently 'github' or 'bitbucket'
+    #[structopt(name = "vcs")]
+    vcs: String,
+
+    /// User or Organization
+    #[structopt(name = "USER")]
+    user: String,
+
+    /// CircleCI project name
+    #[structopt(name = "PROJECT")]
+    project: String,
+
+    /// Build number of CircleCI job
+    #[structopt(name = "BUILD_NUM")]
+    build_num: u32,
+}
 
 fn main() {
-    let circle_token = env::var("CIRCLE_TOKEN").unwrap_or_else(|_| {
-        writeln!(std::io::stderr(), "missing CIRCLE_TOKEN environemt variable.").unwrap();
-        std::process::exit(1);
-    });
+    let opt = Opt::from_args();
 
-    let port = env::var("PORT").unwrap_or("3000".to_string());
-
-    let vcs = nth_arg_or_exit(1);
-    let user = nth_arg_or_exit(2);
-    let project = nth_arg_or_exit(3);
-    let build_num = u32::from_str(nth_arg_or_exit(4).as_str()).unwrap();
-    let handle_assets = std::env::args().nth(5).map(|x| x == "--handle-assets").unwrap_or(false);
-
-    let downloaded_dir = download_artifacts(vcs, user, project, build_num, circle_token).unwrap();
+    let downloaded_dir = if opt.skip_download {
+        downloaded_dir(opt.vcs, opt.user, opt.project, opt.build_num, opt.directory)
+    } else {
+        download_artifacts(opt.vcs, opt.user, opt.project, opt.build_num, opt.circle_token, opt.directory).unwrap()
+    };
 
     let mut mount = Mount::new();
     mount.mount("/", Static::new(downloaded_dir.clone()));
 
     let mut chain = Chain::new(mount);
-    if handle_assets {
+    if opt.handle_assets {
         let assets = StaticAssets::new(downloaded_dir.clone(), "static".to_string());
         chain.link_after(assets);
     }
@@ -48,31 +75,11 @@ fn main() {
         path: downloaded_dir.join(Path::new("index.html")),
     });
 
-    println!("Start server localhost:{}", port);
-    Iron::new(chain).http(format!("localhost:{}", port)).unwrap();
+    println!("Start server localhost:{}", opt.port);
+    Iron::new(chain).http(format!("localhost:{}", opt.port)).unwrap();
 }
 
-fn nth_arg_or_exit(nth: usize) -> String {
-    let arg = std::env::args().nth(nth);
-    if arg.is_none() {
-        print_usage_and_exit();
-    }
-    arg.unwrap()
-}
-
-fn print_usage_and_exit() {
-    let program = std::env::args().nth(0).unwrap();
-    let program_name = Path::new(&program).file_name().and_then(|f| f.to_str()).unwrap();
-    writeln!(
-        std::io::stderr(),
-        "Usage: {} VCS USER PROJECT BUILD_NUM",
-        program_name
-    )
-    .unwrap();
-    std::process::exit(1);
-}
-
-fn downloaded_dir(vcs: String, user: String, project: String, build_num: u32) -> PathBuf {
+fn downloaded_dir(vcs: String, user: String, project: String, build_num: u32, directory: Option<PathBuf>) -> PathBuf {
     let dest = format!(
         "{vcs}/{user}/{project}/{build_num}",
         vcs = vcs,
@@ -80,7 +87,10 @@ fn downloaded_dir(vcs: String, user: String, project: String, build_num: u32) ->
         project = project,
         build_num = build_num
     );
-    PathBuf::from(&dest)
+    match directory {
+        Some(dir) => dir.join(dest),
+        None => PathBuf::from(&dest)
+    }
 }
 
 fn download_artifacts(
@@ -89,8 +99,9 @@ fn download_artifacts(
     project: String,
     build_num: u32,
     token: String,
+    directory: Option<PathBuf>
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let dest_path = downloaded_dir(vcs.clone(), user.clone(), project.clone(), build_num);
+    let dest_path = downloaded_dir(vcs.clone(), user.clone(), project.clone(), build_num, directory);
 
     let circle_job = CircleCIBuild {
         vcs: vcs,
