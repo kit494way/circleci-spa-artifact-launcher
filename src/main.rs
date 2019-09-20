@@ -25,12 +25,16 @@ struct Opt {
     #[structopt(long, env = "CIRCLE_TOKEN")]
     circle_token: String,
 
+    /// Return /static/path/to/assets file when /**/static/path/to/assets is requested.
+    /// This may be helpful when loading assets files from relative path.
     #[structopt(long)]
     handle_assets: bool,
 
+    /// Skip download artifacts, and launch server
     #[structopt(long)]
     skip_download: bool,
 
+    /// Default current directory
     #[structopt(long, parse(from_os_str))]
     directory: Option<PathBuf>,
 
