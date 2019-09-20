@@ -3,7 +3,11 @@ name = "circleci-spa-artifact-launcher"
 version = "0.1.0"
 authors = ["KITAGAWA Yasutaka <kit494way@gmail.com>"]
 edition = "2018"
-default-run = "circleci-spa-artifact-launcher"
+default-run = "csal"
+
+[[bin]]
+name = "csal"
+path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
