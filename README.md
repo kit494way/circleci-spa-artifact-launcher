@@ -40,3 +40,9 @@ ARGS:
     <project>      CircleCI project name
     <build-num>    Build number of CircleCI job
 ```
+
+### Run in docker
+
+```sh
+$ docker --rm -e CIRCLE_TOKEN=${CIRCLE_TOKEN} kit494way/circleci-spa-artifact-launcher <vcs> <user> <project> <build-num>
+```
