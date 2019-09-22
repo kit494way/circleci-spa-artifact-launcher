@@ -18,7 +18,6 @@ use serde::Deserialize;
 use staticfile::Static;
 use structopt::StructOpt;
 
-
 #[derive(StructOpt)]
 struct Opt {
     /// CircleCI API Token
@@ -64,7 +63,15 @@ fn main() {
     let downloaded_dir = if opt.skip_download {
         downloaded_dir(opt.vcs, opt.user, opt.project, opt.build_num, opt.directory)
     } else {
-        download_artifacts(opt.vcs, opt.user, opt.project, opt.build_num, opt.circle_token, opt.directory).unwrap()
+        download_artifacts(
+            opt.vcs,
+            opt.user,
+            opt.project,
+            opt.build_num,
+            opt.circle_token,
+            opt.directory,
+        )
+        .unwrap()
     };
 
     let mut mount = Mount::new();
@@ -80,10 +87,18 @@ fn main() {
     });
 
     println!("Start server localhost:{}", opt.port);
-    Iron::new(chain).http(format!("localhost:{}", opt.port)).unwrap();
+    Iron::new(chain)
+        .http(format!("localhost:{}", opt.port))
+        .unwrap();
 }
 
-fn downloaded_dir(vcs: String, user: String, project: String, build_num: u32, directory: Option<PathBuf>) -> PathBuf {
+fn downloaded_dir(
+    vcs: String,
+    user: String,
+    project: String,
+    build_num: u32,
+    directory: Option<PathBuf>,
+) -> PathBuf {
     let dest = format!(
         "{vcs}/{user}/{project}/{build_num}",
         vcs = vcs,
@@ -93,7 +108,7 @@ fn downloaded_dir(vcs: String, user: String, project: String, build_num: u32, di
     );
     match directory {
         Some(dir) => dir.join(dest),
-        None => PathBuf::from(&dest)
+        None => PathBuf::from(&dest),
     }
 }
 
@@ -103,9 +118,15 @@ fn download_artifacts(
     project: String,
     build_num: u32,
     token: String,
-    directory: Option<PathBuf>
+    directory: Option<PathBuf>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let dest_path = downloaded_dir(vcs.clone(), user.clone(), project.clone(), build_num, directory);
+    let dest_path = downloaded_dir(
+        vcs.clone(),
+        user.clone(),
+        project.clone(),
+        build_num,
+        directory,
+    );
 
     let circle_job = CircleCIBuild {
         vcs: vcs,
