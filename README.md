@@ -44,5 +44,5 @@ ARGS:
 ### Run in docker
 
 ```sh
-$ docker container run --rm -e CIRCLE_TOKEN=${CIRCLE_TOKEN} kit494way/circleci-spa-artifact-launcher <vcs> <user> <project> <build-num>
+$ docker container run --rm -e CIRCLE_TOKEN=${CIRCLE_TOKEN} -p 3000:3000 kit494way/circleci-spa-artifact-launcher <vcs> <user> <project> <build-num>
 ```
