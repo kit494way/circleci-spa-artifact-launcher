@@ -6,7 +6,7 @@ RUN cargo build --release
 
 FROM debian:buster
 LABEL maintainer="KITAGAWA Yasutaka <kit494way@gmail.com>"
-RUN apt-get update && apt-get install -y libssl-dev \
+RUN apt-get update && apt-get install -y libssl-dev ca-certificates \
     && apt-get clean \
     && rm -fr /var/lib/apt/lists/*
 COPY --from=build /build/target/release/csal ./
