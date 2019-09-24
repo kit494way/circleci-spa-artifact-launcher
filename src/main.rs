@@ -86,10 +86,9 @@ fn main() {
         path: downloaded_dir.join(Path::new("index.html")),
     });
 
-    println!("Start server localhost:{}", opt.port);
-    Iron::new(chain)
-        .http(format!("localhost:{}", opt.port))
-        .unwrap();
+    let listen = format!("0.0.0.0:{}", opt.port);
+    println!("Start server {}", listen);
+    Iron::new(chain).http(listen).unwrap();
 }
 
 fn downloaded_dir(
