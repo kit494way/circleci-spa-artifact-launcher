@@ -1,0 +1,99 @@
+#!/bin/bash
+set -e
+
+usage()
+{
+  cat >&2 <<EOD
+Usage:
+	$(basename $0) [options...]
+
+Description:
+	Wrapper script for csal (circleci-spa-artifact-launcher).
+	CircleCI API Token must be passed by either option '-t' or envrionment variable CIRCLE_TOKEN.
+
+Options:
+	-b <branch>
+	-j <job_name>
+	-p <project>
+	-P <port>
+	-t <circle_token>	If not specified, try to use the envrionment variable CIRCLE_TOKEN.
+	-u <username>
+	-v <vcs_type>	'github' or 'bitbucket'.
+EOD
+}
+
+if [[ ! `which jp` || ! `which fzf` ]]; then
+  echo "This requires jp and fzf." >&2
+  echo ""
+  usage
+  exit 1
+fi
+
+vcs=""
+project=""
+branch=""
+port="3000"
+job_name=""
+circle_token=${CIRCLE_TOKEN:-''}
+
+while getopts "b:hj:p:P:t:u:v:" opt
+do
+  case $opt in
+  b)
+    branch="$OPTARG"
+    ;;
+  h)
+    usage
+    exit
+    ;;
+  j)
+    job_name="$OPTARG"
+    ;;
+  p)
+    project="$OPTARG"
+    ;;
+  P)
+    port="$OPTARG"
+    ;;
+  t)
+    circle_token="$OPTARG"
+    ;;
+  u)
+    vcs_user="$OPTARG"
+    ;;
+  v)
+    vcs="$OPTARG"
+    ;;
+  ?)
+    usage
+    exit 1
+    ;;
+  esac
+done
+shift $(($OPTIND-1))
+
+if [[ -n "${project}" && -n "${vcs}" && -n "${vcs_user}" ]]; then
+  url="https://circleci.com/api/v1.1/project/${vcs}/${vcs_user}/${project}?limit=100&filter=completed"
+else
+  [[ -n "${project}" ]] && echo "option -p project is ignored." >&2
+  [[ -n "${vcs}" ]] && echo "option -v vcs is ignored." >&2
+  [[ -n "${vcs_user}" ]] && echo "option -u username is ignored." >&2
+  url="https://circleci.com/api/v1.1/recent-builds?limit=100"
+fi
+
+if [[ -z "${job_name}" ]]; then
+  query="[?workflows.job_name]"
+else
+  query="[?workflows.job_name=='${job_name}']"
+fi
+
+if [[ -n "${branch}" ]]; then
+  query="${query} | [?branch=='${branch}']"
+fi
+
+set -u
+
+query="${query}.join(' ', [vcs_type,username,reponame,to_string(build_num),branch,workflows.job_name])"
+
+curl -s -u ${circle_token}: "${url}" | jp "${query}" | jp -u 'join(`"\n"`,@)' \
+  | fzf --bind "enter:execute(docker container run --rm -d -e CIRCLE_TOKEN=${circle_token} -p ${port}:3000 kit494way/circleci-spa-artifact-launcher:latest {1} {2} {3} {4} --handle-assets)+abort"
